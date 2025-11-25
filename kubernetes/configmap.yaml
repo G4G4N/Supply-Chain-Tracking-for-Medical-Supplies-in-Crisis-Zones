@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  network: "mainnet"
+  environment: "production"
+  enable-analytics: "true"
+  enable-error-tracking: "true"
+

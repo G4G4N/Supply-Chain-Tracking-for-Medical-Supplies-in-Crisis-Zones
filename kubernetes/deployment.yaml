@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: supply-chain-dapp
+  labels:
+    app: supply-chain-dapp
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: supply-chain-dapp
+  template:
+    metadata:
+      labels:
+        app: supply-chain-dapp
+    spec:
+      containers:
+      - name: dapp
+        image: supply-chain-dapp:latest
+        ports:
+        - containerPort: 80
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: REACT_APP_CONTRACT_ADDRESS
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: contract-address
+        - name: REACT_APP_NETWORK
+          valueFrom:
+            configMapKeyRef:
+              name: app-config
+              key: network
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: supply-chain-dapp-service
+spec:
+  selector:
+    app: supply-chain-dapp
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+  type: LoadBalancer
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: supply-chain-dapp-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: supply-chain-dapp
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+

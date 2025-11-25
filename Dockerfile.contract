@@ -1,0 +1,23 @@
+# Contract Build and Deployment Image
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apk add --no-cache git python3 make g++
+
+# Copy package files
+COPY supply-chain-contract/package*.json ./
+
+# Install dependencies
+RUN npm ci
+
+# Copy contract source
+COPY supply-chain-contract/ ./
+
+# Install security tools
+RUN npm install -g slither-analyzer || true
+
+# Default command
+CMD ["npm", "run", "compile"]
+
