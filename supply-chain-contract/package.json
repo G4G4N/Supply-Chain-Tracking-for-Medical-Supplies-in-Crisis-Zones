@@ -1,6 +1,6 @@
 {
   "name": "supply-chain-contract",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "main": "index.js",
   "scripts": {
     "audit:security": "npm audit --audit-level=moderate",
@@ -13,6 +13,7 @@
     "deploy:sepolia": "hardhat run scripts/deploy.js --network sepolia",
     "deploy:localhost": "hardhat run scripts/deploy.js --network localhost",
     "verify": "hardhat verify",
+    "verify:sepolia": "hardhat verify --network sepolia",
     "audit": "node scripts/audit.js",
     "lint": "solhint 'contracts/**/*.sol'",
     "lint:fix": "solhint 'contracts/**/*.sol' --fix"
@@ -29,7 +30,8 @@
   "devDependencies": {
     "@nomicfoundation/hardhat-chai-matchers": "^2.0.0",
     "@nomicfoundation/hardhat-ethers": "^3.0.0",
-    "@nomicfoundation/hardhat-network-helpers": "^3.0.3",
+    "@nomicfoundation/hardhat-network-helpers": "^1.0.8",
+    "@nomicfoundation/hardhat-verify": "^2.1.3",
     "@typechain/ethers-v6": "^0.5.0",
     "@typechain/hardhat": "^9.0.0",
     "chai": "^4.3.0",

@@ -16,11 +16,21 @@ contract SupplyChain is Ownable, AccessControl, ReentrancyGuard, Pausable {
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
     bytes32 public constant VIEWER_ROLE = keccak256("VIEWER_ROLE");
+    bytes32 public constant VERIFIER_ROLE = keccak256("VERIFIER_ROLE");
 
     enum Status {
-        Created,
-        InTransit,
-        Delivered
+        Manufacturing,      // 0 - Initial creation
+        QualityControl,     // 1 - Quality checks
+        Warehouse,          // 2 - Stored in warehouse
+        InTransit,          // 3 - Being transported
+        Distribution,       // 4 - At distribution center
+        Delivered           // 5 - Final delivery
+    }
+
+    enum AlertLevel {
+        None,
+        Warning,
+        Critical
     }
 
     struct Package {
@@ -31,6 +41,17 @@ contract SupplyChain is Ownable, AccessControl, ReentrancyGuard, Pausable {
         Status status;
         uint256 createdAt;
         uint256 lastUpdatedAt;
+        // Crisis zone monitoring fields
+        int8 temperature; // Temperature in Celsius (can be negative)
+        string location; // GPS coordinates or location hash
+        uint8 humidity; // Humidity percentage (0-100)
+        bool shockDetected; // Impact/shock detection flag
+        uint256 expiryDate; // Expiry timestamp
+        string batchNumber; // Batch/lot number
+        string certification; // Certification hash/IPFS link
+        AlertLevel alertLevel; // Emergency alert level
+        bool verified; // Verification status
+        address verifier; // Address of verifier
     }
 
     // Constants
@@ -71,6 +92,43 @@ contract SupplyChain is Ownable, AccessControl, ReentrancyGuard, Pausable {
         Status oldStatus,
         Status newStatus,
         address indexed updater,
+        uint256 timestamp
+    );
+    event TemperatureUpdated(
+        uint256 indexed id,
+        int8 oldTemperature,
+        int8 newTemperature,
+        address indexed updater,
+        uint256 timestamp
+    );
+    event LocationUpdated(
+        uint256 indexed id,
+        string location,
+        address indexed updater,
+        uint256 timestamp
+    );
+    event ShockDetected(
+        uint256 indexed id,
+        address indexed reporter,
+        uint256 timestamp
+    );
+    event CertificationVerified(
+        uint256 indexed id,
+        string certificationHash,
+        address indexed verifier,
+        uint256 timestamp
+    );
+    event PackageVerified(
+        uint256 indexed id,
+        bool verified,
+        address indexed verifier,
+        uint256 timestamp
+    );
+    event AlertRaised(
+        uint256 indexed id,
+        AlertLevel level,
+        string reason,
+        address indexed reporter,
         uint256 timestamp
     );
 
@@ -128,9 +186,19 @@ contract SupplyChain is Ownable, AccessControl, ReentrancyGuard, Pausable {
             description: description,
             creator: msg.sender,
             currentOwner: msg.sender,
-            status: Status.Created,
+            status: Status.Manufacturing,
             createdAt: timestamp,
-            lastUpdatedAt: timestamp
+            lastUpdatedAt: timestamp,
+            temperature: 0,
+            location: "",
+            humidity: 0,
+            shockDetected: false,
+            expiryDate: 0,
+            batchNumber: "",
+            certification: "",
+            alertLevel: AlertLevel.None,
+            verified: false,
+            verifier: address(0)
         });
 
         userPackages[msg.sender].push(packageId);
@@ -165,9 +233,9 @@ contract SupplyChain is Ownable, AccessControl, ReentrancyGuard, Pausable {
         // Remove from previous owner's list
         _removeFromOwnedList(previousOwner, packageId);
         
-        // Update package
+        // Update package (maintain current status)
         pkg.currentOwner = newOwner;
-        pkg.status = Status.InTransit;
+        // Status remains unchanged during transfer
         pkg.lastUpdatedAt = timestamp;
 
         // Add to new owner's list
@@ -177,17 +245,102 @@ contract SupplyChain is Ownable, AccessControl, ReentrancyGuard, Pausable {
     }
 
     /**
-     * @dev Mark package as delivered
-     * @param packageId The ID of the package to mark as delivered
+     * @dev Update package status to Quality Control
+     * @param packageId The ID of the package
      */
-    function markAsDelivered(uint256 packageId)
+    function updateToQualityControl(uint256 packageId)
         external
         whenNotPaused
         nonReentrant
         validPackageId(packageId)
     {
         Package storage pkg = packages[packageId];
-        require(msg.sender == pkg.currentOwner, "Only current owner can mark delivered");
+        require(msg.sender == pkg.currentOwner, "Only current owner can update status");
+        require(pkg.status == Status.Manufacturing, "Package must be in Manufacturing status");
+
+        Status oldStatus = pkg.status;
+        pkg.status = Status.QualityControl;
+        pkg.lastUpdatedAt = block.timestamp;
+
+        emit PackageStatusUpdated(packageId, oldStatus, Status.QualityControl, msg.sender, block.timestamp);
+    }
+
+    /**
+     * @dev Update package status to Warehouse
+     * @param packageId The ID of the package
+     */
+    function updateToWarehouse(uint256 packageId)
+        external
+        whenNotPaused
+        nonReentrant
+        validPackageId(packageId)
+    {
+        Package storage pkg = packages[packageId];
+        require(msg.sender == pkg.currentOwner, "Only current owner can update status");
+        require(pkg.status == Status.QualityControl, "Package must be in Quality Control status");
+
+        Status oldStatus = pkg.status;
+        pkg.status = Status.Warehouse;
+        pkg.lastUpdatedAt = block.timestamp;
+
+        emit PackageStatusUpdated(packageId, oldStatus, Status.Warehouse, msg.sender, block.timestamp);
+    }
+
+    /**
+     * @dev Update package status to In Transit
+     * @param packageId The ID of the package
+     */
+    function updateToInTransit(uint256 packageId)
+        external
+        whenNotPaused
+        nonReentrant
+        validPackageId(packageId)
+    {
+        Package storage pkg = packages[packageId];
+        require(msg.sender == pkg.currentOwner, "Only current owner can update status");
+        require(pkg.status == Status.Warehouse, "Package must be in Warehouse status");
+
+        Status oldStatus = pkg.status;
+        pkg.status = Status.InTransit;
+        pkg.lastUpdatedAt = block.timestamp;
+
+        emit PackageStatusUpdated(packageId, oldStatus, Status.InTransit, msg.sender, block.timestamp);
+    }
+
+    /**
+     * @dev Update package status to Distribution
+     * @param packageId The ID of the package
+     */
+    function updateToDistribution(uint256 packageId)
+        external
+        whenNotPaused
+        nonReentrant
+        validPackageId(packageId)
+    {
+        Package storage pkg = packages[packageId];
+        require(msg.sender == pkg.currentOwner, "Only current owner can update status");
+        require(pkg.status == Status.InTransit, "Package must be in In Transit status");
+
+        Status oldStatus = pkg.status;
+        pkg.status = Status.Distribution;
+        pkg.lastUpdatedAt = block.timestamp;
+
+        emit PackageStatusUpdated(packageId, oldStatus, Status.Distribution, msg.sender, block.timestamp);
+    }
+
+    /**
+     * @dev Update package status to Delivered
+     * @param packageId The ID of the package
+     */
+    function updateToDelivered(uint256 packageId)
+        external
+        whenNotPaused
+        nonReentrant
+        validPackageId(packageId)
+    {
+        Package storage pkg = packages[packageId];
+        require(msg.sender == pkg.currentOwner, "Only current owner can update status");
+        require(pkg.status == Status.Distribution, "Package must be in Distribution status");
         require(pkg.status != Status.Delivered, "Package already delivered");
 
         Status oldStatus = pkg.status;
@@ -199,29 +352,32 @@ contract SupplyChain is Ownable, AccessControl, ReentrancyGuard, Pausable {
     }
 
     /**
-     * @dev Mark package as in transit (fixed logic - can be called from Created or Delivered status)
-     * @param packageId The ID of the package to mark as in transit
+     * @dev Generic status update function with sequential validation
+     * @param packageId The ID of the package
+     * @param newStatus The new status to set
      */
-    function markAsInTransit(uint256 packageId)
+    function updateStatus(uint256 packageId, Status newStatus)
         external
         whenNotPaused
         nonReentrant
         validPackageId(packageId)
     {
         Package storage pkg = packages[packageId];
-        require(msg.sender == pkg.currentOwner, "Only current owner can mark in transit");
-        require(
-            pkg.status == Status.Created || pkg.status == Status.Delivered,
-            "Package must be Created or Delivered to mark as InTransit"
-        );
-        require(pkg.status != Status.InTransit, "Package already in transit");
+        require(msg.sender == pkg.currentOwner, "Only current owner can update status");
+        
+        Status currentStatus = pkg.status;
+        require(uint256(newStatus) > uint256(currentStatus), "Can only advance status forward");
+        require(uint256(newStatus) == uint256(currentStatus) + 1, "Can only advance one stage at a time");
+        require(newStatus != Status.Delivered || currentStatus == Status.Distribution, "Invalid status transition");
 
         Status oldStatus = pkg.status;
-        pkg.status = Status.InTransit;
+        pkg.status = newStatus;
         pkg.lastUpdatedAt = block.timestamp;
 
-        emit PackageTransferred(packageId, pkg.currentOwner, pkg.currentOwner, pkg.status, block.timestamp);
-        emit PackageStatusUpdated(packageId, oldStatus, Status.InTransit, msg.sender, block.timestamp);
+        if (newStatus == Status.Delivered) {
+            emit PackageDelivered(packageId, pkg.currentOwner, block.timestamp);
+        }
+        emit PackageStatusUpdated(packageId, oldStatus, newStatus, msg.sender, block.timestamp);
     }
 
     /**
@@ -259,9 +415,19 @@ contract SupplyChain is Ownable, AccessControl, ReentrancyGuard, Pausable {
                 description: descriptions[i],
                 creator: msg.sender,
                 currentOwner: msg.sender,
-                status: Status.Created,
+                status: Status.Manufacturing,
                 createdAt: timestamp,
-                lastUpdatedAt: timestamp
+                lastUpdatedAt: timestamp,
+                temperature: 0,
+                location: "",
+                humidity: 0,
+                shockDetected: false,
+                expiryDate: 0,
+                batchNumber: "",
+                certification: "",
+                alertLevel: AlertLevel.None,
+                verified: false,
+                verifier: address(0)
             });
 
             userPackages[msg.sender].push(packageId);
@@ -308,7 +474,7 @@ contract SupplyChain is Ownable, AccessControl, ReentrancyGuard, Pausable {
             _removeFromOwnedList(previousOwner, packageId);
 
             pkg.currentOwner = newOwner;
-            pkg.status = Status.InTransit;
+            // Status remains unchanged during batch transfer
             pkg.lastUpdatedAt = timestamp;
 
             ownedPackages[newOwner].push(packageId);
@@ -327,6 +493,16 @@ contract SupplyChain is Ownable, AccessControl, ReentrancyGuard, Pausable {
      * @return status Current status
      * @return createdAt Creation timestamp
      * @return lastUpdatedAt Last update timestamp
+     * @return temperature Temperature in Celsius
+     * @return location Location string
+     * @return humidity Humidity percentage
+     * @return shockDetected Shock detection flag
+     * @return expiryDate Expiry timestamp
+     * @return batchNumber Batch number
+     * @return certification Certification hash
+     * @return alertLevel Alert level
+     * @return verified Verification status
+     * @return verifier Verifier address
      */
     function getPackageDetails(uint256 packageId)
         external
@@ -339,7 +515,17 @@ contract SupplyChain is Ownable, AccessControl, ReentrancyGuard, Pausable {
             address currentOwner,
             Status status,
             uint256 createdAt,
-            uint256 lastUpdatedAt
+            uint256 lastUpdatedAt,
+            int8 temperature,
+            string memory location,
+            uint8 humidity,
+            bool shockDetected,
+            uint256 expiryDate,
+            string memory batchNumber,
+            string memory certification,
+            AlertLevel alertLevel,
+            bool verified,
+            address verifier
         )
     {
         Package storage pkg = packages[packageId];
@@ -350,7 +536,17 @@ contract SupplyChain is Ownable, AccessControl, ReentrancyGuard, Pausable {
             pkg.currentOwner,
             pkg.status,
             pkg.createdAt,
-            pkg.lastUpdatedAt
+            pkg.lastUpdatedAt,
+            pkg.temperature,
+            pkg.location,
+            pkg.humidity,
+            pkg.shockDetected,
+            pkg.expiryDate,
+            pkg.batchNumber,
+            pkg.certification,
+            pkg.alertLevel,
+            pkg.verified,
+            pkg.verifier
         );
     }
 
@@ -437,6 +633,225 @@ contract SupplyChain is Ownable, AccessControl, ReentrancyGuard, Pausable {
      */
     function revokeOperatorRole(address account) external onlyRole(ADMIN_ROLE) {
         _revokeRole(OPERATOR_ROLE, account);
+    }
+
+    /**
+     * @dev Update package temperature
+     * @param packageId The ID of the package
+     * @param temperature Temperature in Celsius
+     */
+    function updateTemperature(uint256 packageId, int8 temperature)
+        external
+        whenNotPaused
+        nonReentrant
+        validPackageId(packageId)
+    {
+        Package storage pkg = packages[packageId];
+        require(
+            msg.sender == pkg.currentOwner || hasRole(OPERATOR_ROLE, msg.sender),
+            "Only owner or operator can update temperature"
+        );
+
+        int8 oldTemperature = pkg.temperature;
+        pkg.temperature = temperature;
+        pkg.lastUpdatedAt = block.timestamp;
+
+        emit TemperatureUpdated(packageId, oldTemperature, temperature, msg.sender, block.timestamp);
+    }
+
+    /**
+     * @dev Update package location
+     * @param packageId The ID of the package
+     * @param location GPS coordinates or location hash
+     */
+    function updateLocation(uint256 packageId, string calldata location)
+        external
+        whenNotPaused
+        nonReentrant
+        validPackageId(packageId)
+    {
+        Package storage pkg = packages[packageId];
+        require(
+            msg.sender == pkg.currentOwner || hasRole(OPERATOR_ROLE, msg.sender),
+            "Only owner or operator can update location"
+        );
+        require(bytes(location).length <= 200, "Location string too long");
+
+        pkg.location = location;
+        pkg.lastUpdatedAt = block.timestamp;
+
+        emit LocationUpdated(packageId, location, msg.sender, block.timestamp);
+    }
+
+    /**
+     * @dev Update package humidity
+     * @param packageId The ID of the package
+     * @param humidity Humidity percentage (0-100)
+     */
+    function updateHumidity(uint256 packageId, uint8 humidity)
+        external
+        whenNotPaused
+        nonReentrant
+        validPackageId(packageId)
+    {
+        Package storage pkg = packages[packageId];
+        require(
+            msg.sender == pkg.currentOwner || hasRole(OPERATOR_ROLE, msg.sender),
+            "Only owner or operator can update humidity"
+        );
+        require(humidity <= 100, "Humidity must be 0-100");
+
+        pkg.humidity = humidity;
+        pkg.lastUpdatedAt = block.timestamp;
+    }
+
+    /**
+     * @dev Record shock detection
+     * @param packageId The ID of the package
+     */
+    function recordShock(uint256 packageId)
+        external
+        whenNotPaused
+        nonReentrant
+        validPackageId(packageId)
+    {
+        Package storage pkg = packages[packageId];
+        require(
+            msg.sender == pkg.currentOwner || hasRole(OPERATOR_ROLE, msg.sender),
+            "Only owner or operator can record shock"
+        );
+
+        pkg.shockDetected = true;
+        pkg.lastUpdatedAt = block.timestamp;
+
+        emit ShockDetected(packageId, msg.sender, block.timestamp);
+    }
+
+    /**
+     * @dev Update package expiry date
+     * @param packageId The ID of the package
+     * @param expiryDate Expiry timestamp
+     */
+    function updateExpiryDate(uint256 packageId, uint256 expiryDate)
+        external
+        whenNotPaused
+        nonReentrant
+        validPackageId(packageId)
+    {
+        Package storage pkg = packages[packageId];
+        require(
+            msg.sender == pkg.currentOwner || hasRole(OPERATOR_ROLE, msg.sender),
+            "Only owner or operator can update expiry date"
+        );
+
+        pkg.expiryDate = expiryDate;
+        pkg.lastUpdatedAt = block.timestamp;
+    }
+
+    /**
+     * @dev Update batch number
+     * @param packageId The ID of the package
+     * @param batchNumber Batch/lot number
+     */
+    function updateBatchNumber(uint256 packageId, string calldata batchNumber)
+        external
+        whenNotPaused
+        nonReentrant
+        validPackageId(packageId)
+    {
+        Package storage pkg = packages[packageId];
+        require(
+            msg.sender == pkg.currentOwner || hasRole(OPERATOR_ROLE, msg.sender),
+            "Only owner or operator can update batch number"
+        );
+        require(bytes(batchNumber).length <= 100, "Batch number too long");
+
+        pkg.batchNumber = batchNumber;
+        pkg.lastUpdatedAt = block.timestamp;
+    }
+
+    /**
+     * @dev Verify certification
+     * @param packageId The ID of the package
+     * @param certificationHash Certification hash/IPFS link
+     */
+    function verifyCertification(uint256 packageId, string calldata certificationHash)
+        external
+        whenNotPaused
+        nonReentrant
+        validPackageId(packageId)
+    {
+        Package storage pkg = packages[packageId];
+        require(
+            msg.sender == pkg.currentOwner || hasRole(VERIFIER_ROLE, msg.sender) || hasRole(OPERATOR_ROLE, msg.sender),
+            "Only owner, verifier, or operator can verify certification"
+        );
+        require(bytes(certificationHash).length <= 200, "Certification hash too long");
+
+        pkg.certification = certificationHash;
+        pkg.lastUpdatedAt = block.timestamp;
+
+        emit CertificationVerified(packageId, certificationHash, msg.sender, block.timestamp);
+    }
+
+    /**
+     * @dev Verify package (verifier only)
+     * @param packageId The ID of the package
+     * @param verified Verification status
+     */
+    function verifyPackage(uint256 packageId, bool verified)
+        external
+        whenNotPaused
+        nonReentrant
+        validPackageId(packageId)
+        onlyRole(VERIFIER_ROLE)
+    {
+        Package storage pkg = packages[packageId];
+        pkg.verified = verified;
+        pkg.verifier = msg.sender;
+        pkg.lastUpdatedAt = block.timestamp;
+
+        emit PackageVerified(packageId, verified, msg.sender, block.timestamp);
+    }
+
+    /**
+     * @dev Raise emergency alert
+     * @param packageId The ID of the package
+     * @param level Alert level
+     * @param reason Reason for alert
+     */
+    function raiseAlert(uint256 packageId, AlertLevel level, string calldata reason)
+        external
+        whenNotPaused
+        nonReentrant
+        validPackageId(packageId)
+    {
+        Package storage pkg = packages[packageId];
+        require(
+            msg.sender == pkg.currentOwner || hasRole(OPERATOR_ROLE, msg.sender) || hasRole(VERIFIER_ROLE, msg.sender),
+            "Only owner, operator, or verifier can raise alerts"
+        );
+        require(bytes(reason).length <= 500, "Reason too long");
+        require(level != AlertLevel.None, "Cannot raise None alert");
+
+        pkg.alertLevel = level;
+        pkg.lastUpdatedAt = block.timestamp;
+
+        emit AlertRaised(packageId, level, reason, msg.sender, block.timestamp);
+    }
+
+    /**
+     * @dev Grant verifier role (admin only)
+     */
+    function grantVerifierRole(address account) external onlyRole(ADMIN_ROLE) {
+        _grantRole(VERIFIER_ROLE, account);
+    }
+
+    /**
+     * @dev Revoke verifier role (admin only)
+     */
+    function revokeVerifierRole(address account) external onlyRole(ADMIN_ROLE) {
+        _revokeRole(VERIFIER_ROLE, account);
     }
 }
 
