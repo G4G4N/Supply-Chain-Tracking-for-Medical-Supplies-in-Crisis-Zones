@@ -37,8 +37,19 @@ const config = {
     },
   },
   networks: {},
+  // Etherscan API v2 (single API key for all networks)
   etherscan: {
     apiKey: ETHERSCAN_API_KEY,
+    customChains: [
+      {
+        network: "sepolia",
+        chainId: 11155111,
+        urls: {
+          apiURL: "https://api-sepolia.etherscan.io/v2/api",
+          browserURL: "https://sepolia.etherscan.io",
+        },
+      },
+    ],
   },
 };
 
