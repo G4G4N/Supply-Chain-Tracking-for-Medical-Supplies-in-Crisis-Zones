@@ -19,6 +19,8 @@ jobs:
     
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: recursive
       
       - name: Setup Node.js
         uses: actions/setup-node@v3
@@ -78,6 +80,8 @@ jobs:
     
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: recursive
       
       - name: Setup Node.js
         uses: actions/setup-node@v3
@@ -110,18 +114,23 @@ jobs:
     
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: recursive
       
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
+          cache-dependency-path: ./supply-chain-dapp/package-lock.json
       
       - name: Install dependencies
         run: npm ci
+        working-directory: ./supply-chain-dapp
       
       - name: Build application
         run: npm run build
+        working-directory: ./supply-chain-dapp
         env:
           REACT_APP_CONTRACT_ADDRESS: ${{ secrets.REACT_APP_CONTRACT_ADDRESS || '0x0000000000000000000000000000000000000000' }}
           REACT_APP_NETWORK: sepolia
@@ -144,6 +153,8 @@ jobs:
     
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: recursive
       
       - name: Setup Node.js
         uses: actions/setup-node@v3
@@ -152,9 +163,11 @@ jobs:
       
       - name: Install dependencies
         run: npm ci
+        working-directory: ./supply-chain-dapp
       
       - name: Install Playwright
         run: npx playwright install --with-deps
+        working-directory: ./supply-chain-dapp
       
       - name: Download build artifacts
         uses: actions/download-artifact@v3
@@ -164,6 +177,7 @@ jobs:
       
       - name: Run E2E tests
         run: npx playwright test
+        working-directory: ./supply-chain-dapp
         continue-on-error: true
       
       - name: Upload test results
@@ -180,6 +194,8 @@ jobs:
     
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: recursive
       
       - name: Run npm audit (Contract)
         working-directory: ./supply-chain-contract

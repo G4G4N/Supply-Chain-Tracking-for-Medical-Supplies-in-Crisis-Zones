@@ -14,6 +14,8 @@ jobs:
     
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: recursive
       
       - name: Run npm audit (Contract)
         working-directory: ./supply-chain-contract
@@ -30,6 +32,8 @@ jobs:
     
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: recursive
       
       - name: Run ESLint security rules
         working-directory: ./supply-chain-dapp
@@ -43,6 +47,8 @@ jobs:
     
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: recursive
       
       - name: Run Gitleaks
         uses: gitleaks/gitleaks-action@v2
@@ -55,6 +61,8 @@ jobs:
     
     steps:
       - uses: actions/checkout@v3
+        with:
+          submodules: recursive
       
       - name: Build Docker image
         run: docker build -t supply-chain-dapp .
