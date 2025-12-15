@@ -115,7 +115,7 @@ describe("SupplyChain", function () {
 
       const details = await supplyChain.getPackageDetails(1);
       expect(details.currentOwner).to.equal(user2.address);
-      expect(details.status).to.equal(1n); // InTransit
+      expect(details.status).to.equal(0n); // Manufacturing (status doesn't change on transfer)
     });
 
     it("Should reject transfer from non-owner", async function () {
@@ -166,54 +166,58 @@ describe("SupplyChain", function () {
     it("Should mark package as delivered", async function () {
       const { supplyChain, user1 } = await loadFixture(deploySupplyChainFixture);
       
+      // Follow proper status flow: Manufacturing → QualityControl → Warehouse → InTransit → Distribution → Delivered
       await supplyChain.connect(user1).createPackage("Test package");
-      await supplyChain.connect(user1).markAsDelivered(1);
+      await supplyChain.connect(user1).updateToQualityControl(1);
+      await supplyChain.connect(user1).updateToWarehouse(1);
+      await supplyChain.connect(user1).updateToInTransit(1);
+      await supplyChain.connect(user1).updateToDistribution(1);
+      await supplyChain.connect(user1).updateToDelivered(1);
 
       const details = await supplyChain.getPackageDetails(1);
-      expect(details.status).to.equal(2n); // Delivered
+      expect(details.status).to.equal(5n); // Delivered
     });
 
     it("Should reject delivery from non-owner", async function () {
       const { supplyChain, user1, user2 } = await loadFixture(deploySupplyChainFixture);
       
+      // Follow proper status flow to Distribution
       await supplyChain.connect(user1).createPackage("Test package");
+      await supplyChain.connect(user1).updateToQualityControl(1);
+      await supplyChain.connect(user1).updateToWarehouse(1);
+      await supplyChain.connect(user1).updateToInTransit(1);
+      await supplyChain.connect(user1).updateToDistribution(1);
+      
       await expect(
-        supplyChain.connect(user2).markAsDelivered(1)
-      ).to.be.revertedWith("Only current owner can mark delivered");
+        supplyChain.connect(user2).updateToDelivered(1)
+      ).to.be.revertedWith("Only current owner can update status");
     });
 
-    it("Should mark package as in transit from Created status", async function () {
+    it("Should mark package as in transit from Warehouse status", async function () {
       const { supplyChain, user1 } = await loadFixture(deploySupplyChainFixture);
       
+      // Follow proper status flow: Manufacturing → QualityControl → Warehouse → InTransit
       await supplyChain.connect(user1).createPackage("Test package");
-      await supplyChain.connect(user1).markAsInTransit(1);
+      await supplyChain.connect(user1).updateToQualityControl(1);
+      await supplyChain.connect(user1).updateToWarehouse(1);
+      await supplyChain.connect(user1).updateToInTransit(1);
 
       const details = await supplyChain.getPackageDetails(1);
-      expect(details.status).to.equal(1n); // InTransit
-    });
-
-    it("Should mark package as in transit from Delivered status (FIXED BUG)", async function () {
-      const { supplyChain, user1 } = await loadFixture(deploySupplyChainFixture);
-      
-      await supplyChain.connect(user1).createPackage("Test package");
-      await supplyChain.connect(user1).markAsDelivered(1);
-      
-      // This should now work (previously failed)
-      await supplyChain.connect(user1).markAsInTransit(1);
-
-      const details = await supplyChain.getPackageDetails(1);
-      expect(details.status).to.equal(1n); // InTransit
+      expect(details.status).to.equal(3n); // InTransit
     });
 
     it("Should reject in transit if already in transit", async function () {
       const { supplyChain, user1 } = await loadFixture(deploySupplyChainFixture);
       
+      // Follow proper status flow to InTransit
       await supplyChain.connect(user1).createPackage("Test package");
-      await supplyChain.connect(user1).markAsInTransit(1);
+      await supplyChain.connect(user1).updateToQualityControl(1);
+      await supplyChain.connect(user1).updateToWarehouse(1);
+      await supplyChain.connect(user1).updateToInTransit(1);
       
       await expect(
-        supplyChain.connect(user1).markAsInTransit(1)
-      ).to.be.revertedWith("Package must be Created or Delivered to mark as InTransit");
+        supplyChain.connect(user1).updateToInTransit(1)
+      ).to.be.revertedWith("Package must be in Warehouse status");
     });
   });
 
