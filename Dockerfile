@@ -8,7 +8,7 @@ WORKDIR /app
 COPY supply-chain-dapp/package*.json ./
 
 # Install dependencies
-RUN npm ci --only=production=false
+RUN npm ci --only=production=false --legacy-peer-deps
 
 # Copy source code
 COPY supply-chain-dapp/ ./

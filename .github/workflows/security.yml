@@ -38,7 +38,7 @@ jobs:
       - name: Run ESLint security rules
         working-directory: ./supply-chain-dapp
         run: |
-          npm ci
+          npm ci --legacy-peer-deps
           npm run lint || true
         continue-on-error: true
 
