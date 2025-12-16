@@ -138,7 +138,7 @@ jobs:
           REACT_APP_NETWORK: sepolia
       
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: build
           path: ./supply-chain-dapp/build
@@ -172,7 +172,7 @@ jobs:
         working-directory: ./supply-chain-dapp
       
       - name: Download build artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: build
           path: ./supply-chain-dapp/build
@@ -183,7 +183,7 @@ jobs:
         continue-on-error: true
       
       - name: Upload test results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: playwright-report
