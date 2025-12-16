@@ -136,6 +136,9 @@ jobs:
         env:
           REACT_APP_CONTRACT_ADDRESS: ${{ secrets.REACT_APP_CONTRACT_ADDRESS || '0x0000000000000000000000000000000000000000' }}
           REACT_APP_NETWORK: sepolia
+          ESLINT_NO_DEV_ERRORS: true
+          DISABLE_ESLINT_PLUGIN: false
+          GENERATE_SOURCEMAP: false
       
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
