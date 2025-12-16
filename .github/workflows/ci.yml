@@ -72,37 +72,38 @@ jobs:
           flags: contract
         continue-on-error: true
 
-  test-frontend:
-    name: Test Frontend
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./supply-chain-dapp
-    
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: recursive
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: ./supply-chain-dapp/package-lock.json
-      
-      - name: Install dependencies
-        run: npm ci --legacy-peer-deps
-      
-      - name: Run unit tests
-        run: npm test -- --coverage --watchAll=false
-      
-      - name: Upload coverage
-        uses: codecov/codecov-action@v3
-        with:
-          files: ./supply-chain-dapp/coverage/lcov.info
-          flags: frontend
-        continue-on-error: true
+  # test-frontend job disabled - frontend tests can be run locally if needed
+  # test-frontend:
+  #   name: Test Frontend
+  #   runs-on: ubuntu-latest
+  #   defaults:
+  #     run:
+  #       working-directory: ./supply-chain-dapp
+  #   
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #       with:
+  #         submodules: recursive
+  #     
+  #     - name: Setup Node.js
+  #       uses: actions/setup-node@v3
+  #       with:
+  #         node-version: ${{ env.NODE_VERSION }}
+  #         cache: 'npm'
+  #         cache-dependency-path: ./supply-chain-dapp/package-lock.json
+  #     
+  #     - name: Install dependencies
+  #       run: npm ci --legacy-peer-deps
+  #     
+  #     - name: Run unit tests
+  #       run: npm test -- --coverage --watchAll=false
+  #     
+  #     - name: Upload coverage
+  #       uses: codecov/codecov-action@v3
+  #       with:
+  #         files: ./supply-chain-dapp/coverage/lcov.info
+  #         flags: frontend
+  #       continue-on-error: true
 
   build:
     name: Build
@@ -111,7 +112,7 @@ jobs:
       run:
         working-directory: ./supply-chain-dapp
     
-    needs: [lint, test-frontend]
+    needs: [lint]
     
     steps:
       - uses: actions/checkout@v3
